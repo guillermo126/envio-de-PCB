@@ -42,99 +42,92 @@ typedef struct mensaje_CPU_KERNEL_t {
 	uint32_t payloadPCB;
 } mensaje_CPU_KERNEL;
 
-void desSerializarPcb(pcb* PCBDESSERIALIZADO, char* buffer) {
-		int payloadDesserializado = 0;
-		memcpy(&*PCBDESSERIALIZADO, buffer + payloadDesserializado,
-				sizeof(uint32_t) * 6 + sizeof(t_size) * 2+sizeof(int));
-		payloadDesserializado += sizeof(uint32_t) * 6 + sizeof(t_size) * 2+sizeof(int);
-		if (PCBDESSERIALIZADO->cant_instrucciones > 0) {
-			PCBDESSERIALIZADO->instrucciones = malloc(
-					PCBDESSERIALIZADO->cant_instrucciones * sizeof(t_intructions));
-			memcpy(PCBDESSERIALIZADO->instrucciones, buffer + payloadDesserializado,
-					PCBDESSERIALIZADO->cant_instrucciones * sizeof(t_intructions));
-			payloadDesserializado += PCBDESSERIALIZADO->cant_instrucciones
-					* sizeof(t_intructions);
+void desSerializarPcb(kernel_pcb* PCBDESSERIALIZADO, char* buffer) {
+	int payloadDesserializado = 0;
+	memcpy(&*PCBDESSERIALIZADO, buffer + payloadDesserializado,
+			sizeof(uint32_t) * 6 + sizeof(t_size) * 2 + sizeof(int));
+	payloadDesserializado += sizeof(uint32_t) * 6 + sizeof(t_size) * 2 + sizeof(int);
+	if (PCBDESSERIALIZADO->cant_instrucciones > 0) {
+		PCBDESSERIALIZADO->instrucciones = malloc(PCBDESSERIALIZADO->cant_instrucciones * sizeof(t_intructions));
+		memcpy(PCBDESSERIALIZADO->instrucciones, buffer + payloadDesserializado,
+				PCBDESSERIALIZADO->cant_instrucciones * sizeof(t_intructions));
+		payloadDesserializado += PCBDESSERIALIZADO->cant_instrucciones * sizeof(t_intructions);
+	}
+	if (PCBDESSERIALIZADO->tamano_etiquetas > 0) {
+		PCBDESSERIALIZADO->etiquetas = malloc(PCBDESSERIALIZADO->tamano_etiquetas);
+		memcpy(PCBDESSERIALIZADO->etiquetas, buffer + payloadDesserializado, PCBDESSERIALIZADO->tamano_etiquetas);
+		payloadDesserializado += PCBDESSERIALIZADO->tamano_etiquetas;
+	}
+	PCBDESSERIALIZADO->indiceDeStack = list_create();
+	if (PCBDESSERIALIZADO->cantidadDeNivelesStack > 0) {
+		int i;
+		//aca tendria q ir para args y vars
+		t_list* listAuxVars = list_create();
+		t_list* listAuxArgs = list_create();
+
+		//prmero agrego en listaVars
+		for (i = 0; i < PCBDESSERIALIZADO->cantidadDeNivelesStack; i++) {
+			int auxiliar;
+			memcpy(&auxiliar, buffer + payloadDesserializado, sizeof(int));
+			payloadDesserializado += sizeof(int);
+			list_add(listAuxVars, (void*) auxiliar);
 		}
-		if (PCBDESSERIALIZADO->tamano_etiquetas > 0) {
-			PCBDESSERIALIZADO->etiquetas = malloc(
-					PCBDESSERIALIZADO->tamano_etiquetas);
-			memcpy(PCBDESSERIALIZADO->etiquetas, buffer + payloadDesserializado,
-					PCBDESSERIALIZADO->tamano_etiquetas);
-			payloadDesserializado += PCBDESSERIALIZADO->tamano_etiquetas;
+		//despues agrego en listaAgs
+		for (i = 0; i < PCBDESSERIALIZADO->cantidadDeNivelesStack; i++) {
+			int auxiliar2;
+			memcpy(&auxiliar2, buffer + payloadDesserializado, sizeof(int));
+			payloadDesserializado += sizeof(int);
+			list_add(listAuxArgs, (void*) auxiliar2);
 		}
-		PCBDESSERIALIZADO->indiceDeStack = list_create();
-		if (PCBDESSERIALIZADO->cantidadDeNivelesStack > 0) {
-			int i;
-			//aca tendria q ir para args y vars
-			t_list* listAuxVars = list_create();
-			t_list* listAuxArgs = list_create();
-
-			//prmero agrego en listaVars
-			for (i = 0; i < PCBDESSERIALIZADO->cantidadDeNivelesStack; i++) {
-				int auxiliar;
-				memcpy(&auxiliar, buffer + payloadDesserializado, sizeof(int));
-				payloadDesserializado += sizeof(int);
-				list_add(listAuxVars, (void*) auxiliar);
-			}
-			//despues agrego en listaAgs
-			for (i = 0; i < PCBDESSERIALIZADO->cantidadDeNivelesStack; i++) {
-				int auxiliar2;
-				memcpy(&auxiliar2, buffer + payloadDesserializado, sizeof(int));
-				payloadDesserializado += sizeof(int);
-				list_add(listAuxArgs, (void*) auxiliar2);
-						}
-			void desserializarIndiceDeStackConVars(void* data) {
-				int auxiliar = (int) data;
-				nivelDeStack* unNivelNuevo = malloc(sizeof(nivelDeStack));
-				//esto es para vars
-				unNivelNuevo->vars = dictionary_create();
-				for (i = 0; i < auxiliar; i++) {
-					char* auxiliarkey = malloc(2);
-					memcpy(auxiliarkey, buffer + payloadDesserializado, 2);
-					payloadDesserializado += 2;
-					posicionMemoria* unaPos = malloc(sizeof(posicionMemoria));
-					memcpy(unaPos, buffer + payloadDesserializado,
-							sizeof(posicionMemoria));
-					payloadDesserializado += sizeof(posicionMemoria);
-					dictionary_put(unNivelNuevo->vars, auxiliarkey, (void*) unaPos);
-				}
-
-
-				list_add(PCBDESSERIALIZADO->indiceDeStack, (void*) unNivelNuevo);
-			}
-			int j=0;
-			void desserializarIndiceDeStackConArgs(void*data){
-				int auxiliar = (int) data;
-				nivelDeStack* nivelStack = malloc(sizeof(nivelDeStack));
-				nivelStack=list_get(PCBDESSERIALIZADO->indiceDeStack,j);
-				//esto para args
-				nivelStack->args = dictionary_create();
-				for (i = 0; i < auxiliar; i++) {
+		void desserializarIndiceDeStackConVars(void* data) {
+			int auxiliar = (int) data;
+			nivelDeStack* unNivelNuevo = malloc(sizeof(nivelDeStack));
+			//esto es para vars
+			unNivelNuevo->vars = dictionary_create();
+			for (i = 0; i < auxiliar; i++) {
 				char* auxiliarkey = malloc(2);
 				memcpy(auxiliarkey, buffer + payloadDesserializado, 2);
 				payloadDesserializado += 2;
 				posicionMemoria* unaPos = malloc(sizeof(posicionMemoria));
-				memcpy(unaPos, buffer + payloadDesserializado,
-				sizeof(posicionMemoria));
+				memcpy(unaPos, buffer + payloadDesserializado, sizeof(posicionMemoria));
+				payloadDesserializado += sizeof(posicionMemoria);
+				dictionary_put(unNivelNuevo->vars, auxiliarkey, (void*) unaPos);
+			}
+
+			list_add(PCBDESSERIALIZADO->indiceDeStack, (void*) unNivelNuevo);
+		}
+		int j = 0;
+		void desserializarIndiceDeStackConArgs(void*data) {
+			int auxiliar = (int) data;
+			nivelDeStack* nivelStack = malloc(sizeof(nivelDeStack));
+			nivelStack = list_get(PCBDESSERIALIZADO->indiceDeStack, j);
+			//esto para args
+			nivelStack->args = dictionary_create();
+			for (i = 0; i < auxiliar; i++) {
+				char* auxiliarkey = malloc(2);
+				memcpy(auxiliarkey, buffer + payloadDesserializado, 2);
+				payloadDesserializado += 2;
+				posicionMemoria* unaPos = malloc(sizeof(posicionMemoria));
+				memcpy(unaPos, buffer + payloadDesserializado, sizeof(posicionMemoria));
 				payloadDesserializado += sizeof(posicionMemoria);
 				dictionary_put(nivelStack->args, auxiliarkey, (void*) unaPos);
-				}
-				memcpy(&(nivelStack->retPos), buffer + payloadDesserializado,	sizeof(int));
-				payloadDesserializado += sizeof(int);
-				memcpy(&(nivelStack->retVar), buffer + payloadDesserializado,sizeof(posicionMemoria));
-				payloadDesserializado += sizeof(posicionMemoria);
-				j++;
 			}
-			list_iterate(listAuxVars, desserializarIndiceDeStackConVars);
-			list_iterate(listAuxArgs, desserializarIndiceDeStackConArgs);
-			list_destroy(listAuxVars);
-			list_destroy(listAuxArgs);
+			memcpy(&(nivelStack->retPos), buffer + payloadDesserializado, sizeof(int));
+			payloadDesserializado += sizeof(int);
+			memcpy(&(nivelStack->retVar), buffer + payloadDesserializado, sizeof(posicionMemoria));
+			payloadDesserializado += sizeof(posicionMemoria);
+			j++;
 		}
+		list_iterate(listAuxVars, desserializarIndiceDeStackConVars);
+		list_iterate(listAuxArgs, desserializarIndiceDeStackConArgs);
+		list_destroy(listAuxVars);
+		list_destroy(listAuxArgs);
 	}
+}
 
 
 
-	int recibirPcb(int socket,pcb* unPcb,mensaje_CPU_KERNEL *mensajeARecibir){
+	int recibirPcb(int socket,kernel_pcb* unPcb,mensaje_CPU_KERNEL *mensajeARecibir){
 		char* buffer = malloc(sizeof(uint32_t));
 			int payloadDesserializacion = 0;
 			int resultado = recv(socket, buffer,sizeof(uint32_t), 0);
@@ -153,7 +146,7 @@ void desSerializarPcb(pcb* PCBDESSERIALIZADO, char* buffer) {
 		return resultado;
 	}
 
-	void mostrarPCB(pcb* unPCB) {
+	void mostrarPCB(kernel_pcb* unPCB) {
 		printf("\n\t\tIDENTIFICADOR:%d\n", unPCB->pid);
 		printf("\t\tCANTIDAD_DE_INSTRUCCIONES: %d\n", unPCB->cant_instrucciones);
 		printf("\t\tCANTIDAD_DE_NIVELES_DE_STACK: %d\n", unPCB->cantidadDeNivelesStack);
@@ -234,7 +227,7 @@ int main(){
 	int socketCliente = accept(listenningSocket, (struct sockaddr *) &addr, &addrlen);
 
 
-	pcb* unPcb=malloc(sizeof(pcb));
+	kernel_pcb* unPcb=malloc(sizeof(kernel_pcb));
 	mensaje_CPU_KERNEL *mensajeARecibir=malloc(sizeof(mensaje_CPU_KERNEL));
 	recibirPcb(socketCliente,unPcb,mensajeARecibir);
 

@@ -47,7 +47,7 @@ AnSISOP_kernel kernel_functions = { .AnSISOP_wait = kernel_wait,
 		 .AnSISOP_escribir=kernel_escribir,
 		 .AnSISOP_leer=kernel_leer,
 };
-void mostrarPCB(pcb* unPCB) {
+void mostrarPCB(kernel_pcb* unPCB) {
 	printf("\n\t\tIDENTIFICADOR:%d\n", unPCB->pid);
 	printf("\t\tCANTIDAD_DE_INSTRUCCIONES: %d\n", unPCB->cant_instrucciones);
 	printf("\t\tCANTIDAD_DE_NIVELES_DE_STACK: %d\n", unPCB->cantidadDeNivelesStack);
@@ -86,7 +86,7 @@ typedef struct mensaje_CPU_KERNEL_t {
 	uint32_t payloadPCB;
 } mensaje_CPU_KERNEL;
 
-t_list *generarListaConCantEnVars(pcb *pcb){
+t_list *generarListaConCantEnVars(kernel_pcb *pcb){
 			t_list* listaAuxiliar = list_create();
 
 				void contarVariables(void* data) {
@@ -98,7 +98,7 @@ t_list *generarListaConCantEnVars(pcb *pcb){
 				return listaAuxiliar;
 
 		}
-		t_list *generarListaConCantEnArgs(pcb *pcb){
+		t_list *generarListaConCantEnArgs(kernel_pcb *pcb){
 			t_list* listaAuxiliar = list_create();
 
 			void contarVariables(void* data) {
@@ -120,7 +120,7 @@ t_list *generarListaConCantEnVars(pcb *pcb){
 					list_iterate(listaAuxiliar, sumarNumeros);
 					return contador;
 				}
-		int tamanioBufferDeUnPCB(pcb* pcbPunteroListGet, t_list* listaParaVars,t_list*listaParaArgs) {
+		int tamanioBufferDeUnPCB(kernel_pcb* pcbPunteroListGet, t_list* listaParaVars,t_list*listaParaArgs) {
 			int tamanioBuffer = 7 * sizeof(uint32_t) + 2 * sizeof(t_size) +sizeof(int)
 					+ pcbPunteroListGet->cant_instrucciones * sizeof(t_intructions)
 					+ pcbPunteroListGet->tamano_etiquetas
@@ -134,70 +134,64 @@ t_list *generarListaConCantEnVars(pcb *pcb){
 			return tamanioBuffer;
 		}
 
-		char* serializarPcb(pcb *unPcb,t_list* listaVars,t_list*listaArgs,mensaje_CPU_KERNEL *mensajeAEnviar){
-						int payloadserializado=0;
-						char* buffer =malloc(7 * sizeof(uint32_t) + 2 * sizeof(t_size) +sizeof(int)
-									+ unPcb->cant_instrucciones * sizeof(t_intructions)
-									+ unPcb->tamano_etiquetas
-									+ listSum(listaVars) * (sizeof(posicionMemoria) + 2)
-									+ listSum(listaArgs) * (sizeof(posicionMemoria) + 2)
-									+ (sizeof(posicionMemoria) + sizeof(int))
-											* list_size(unPcb->indiceDeStack)
+char* serializarPcb(kernel_pcb *unPcb, t_list* listaVars, t_list*listaArgs, mensaje_CPU_KERNEL *mensajeAEnviar) {
+	int payloadserializado = 0;
+	char* buffer = malloc(
+			7 * sizeof(uint32_t) + 2 * sizeof(t_size) + sizeof(int) + unPcb->cant_instrucciones * sizeof(t_intructions)
+					+ unPcb->tamano_etiquetas + listSum(listaVars) * (sizeof(posicionMemoria) + 2)
+					+ listSum(listaArgs) * (sizeof(posicionMemoria) + 2)
+					+ (sizeof(posicionMemoria) + sizeof(int)) * list_size(unPcb->indiceDeStack)
 
-									+ list_size(listaVars) * sizeof(int)
-									+ list_size(listaArgs) * sizeof(int));
-						memcpy(buffer,mensajeAEnviar,sizeof(uint32_t));
-						payloadserializado +=sizeof(uint32_t);
-						memcpy(buffer + payloadserializado,unPcb,sizeof(uint32_t) * 6 + sizeof(t_size) * 2+ sizeof(int));
-						payloadserializado +=sizeof(uint32_t) * 7 + sizeof(t_size) * 2+ sizeof(int);
-						if(unPcb->cant_instrucciones>0){
-							memcpy(buffer+payloadserializado,unPcb->instrucciones,unPcb->cant_instrucciones *sizeof(t_intructions));
-							payloadserializado =+unPcb->cant_instrucciones*sizeof(t_intructions);
-						}
-						if (unPcb->tamano_etiquetas > 0) {
-						memcpy(buffer + payloadserializado, unPcb->etiquetas,
-								unPcb->tamano_etiquetas);
-						payloadserializado += unPcb->tamano_etiquetas;
-							}
-						if (unPcb->cantidadDeNivelesStack > 0) {
+					+ list_size(listaVars) * sizeof(int) + list_size(listaArgs) * sizeof(int));
+	memcpy(buffer, mensajeAEnviar, sizeof(uint32_t));
+	payloadserializado += sizeof(uint32_t);
 
-								void serializarVariablesPorNivel(void* data) {
-									int auxiliar = (int) data;
-									memcpy(buffer + payloadserializado, &auxiliar, sizeof(int));
-									payloadserializado += sizeof(int);
-								}
-								list_iterate(listaVars, serializarVariablesPorNivel);
-								list_iterate(listaArgs, serializarVariablesPorNivel);
+	memcpy(buffer + payloadserializado, unPcb, sizeof(uint32_t) * 6 + sizeof(t_size) * 2 + sizeof(int));
+	payloadserializado += sizeof(uint32_t) * 6 + sizeof(t_size) * 2 + sizeof(int);
 
-								void serializarIndiceDeStack(void* data) {
-									nivelDeStack* unNivel = (nivelDeStack*) data;
+	if (unPcb->cant_instrucciones > 0) {
+		memcpy(buffer + payloadserializado, unPcb->instrucciones, unPcb->cant_instrucciones * sizeof(t_intructions));
+		payloadserializado += unPcb->cant_instrucciones * sizeof(t_intructions);
+	}
+	if (unPcb->tamano_etiquetas > 0) {
 
-									void serializarDiccionarioDeVariables(char* key, void* data) {
-										memcpy(buffer + payloadserializado, key, 2);
-										payloadserializado += 2;
-										memcpy(buffer + payloadserializado, data,
-												sizeof(posicionMemoria));
-										payloadserializado += sizeof(posicionMemoria);
-									}
-									dictionary_iterator(unNivel->vars,
-											serializarDiccionarioDeVariables);
-									dictionary_iterator(unNivel->args,
-											serializarDiccionarioDeVariables);
-									memcpy(buffer + payloadserializado, &(unNivel->retPos),
-											sizeof(int));
-									payloadserializado += sizeof(int);
-									memcpy(buffer + payloadserializado, &(unNivel->retVar),
-											sizeof(posicionMemoria));
-									payloadserializado += sizeof(posicionMemoria);
-								}
-								list_iterate(unPcb->indiceDeStack, serializarIndiceDeStack);
-							}
-						list_destroy(listaVars);
-						list_destroy(listaArgs);
-						return buffer;
-					}//
+		memcpy(buffer + payloadserializado, unPcb->etiquetas, unPcb->tamano_etiquetas);
+		payloadserializado += unPcb->tamano_etiquetas;
+	}
+	if (unPcb->cantidadDeNivelesStack > 0) {
 
-		int enviarPcb(int socket,pcb *unPcb,mensaje_CPU_KERNEL *mensajeAEnviar){
+		void serializarVariablesPorNivel(void* data) {
+			int auxiliar = (int) data;
+			memcpy(buffer + payloadserializado, &auxiliar, sizeof(int));
+			payloadserializado += sizeof(int);
+		}
+		list_iterate(listaVars, serializarVariablesPorNivel);
+		list_iterate(listaArgs, serializarVariablesPorNivel);
+
+		void serializarIndiceDeStack(void* data) {
+			nivelDeStack* unNivel = (nivelDeStack*) data;
+
+			void serializarDiccionarioDeVariables(char* key, void* data) {
+				memcpy(buffer + payloadserializado, key, 2);
+				payloadserializado += 2;
+				memcpy(buffer + payloadserializado, data, sizeof(posicionMemoria));
+				payloadserializado += sizeof(posicionMemoria);
+			}
+			dictionary_iterator(unNivel->vars, serializarDiccionarioDeVariables);
+			dictionary_iterator(unNivel->args, serializarDiccionarioDeVariables);
+			memcpy(buffer + payloadserializado, &(unNivel->retPos), sizeof(int));
+			payloadserializado += sizeof(int);
+			memcpy(buffer + payloadserializado, &(unNivel->retVar), sizeof(posicionMemoria));
+			payloadserializado += sizeof(posicionMemoria);
+		}
+		list_iterate(unPcb->indiceDeStack, serializarIndiceDeStack);
+	}
+	list_destroy(listaVars);
+	list_destroy(listaArgs);
+	return buffer;
+} //
+
+		int enviarPcb(int socket,kernel_pcb *unPcb,mensaje_CPU_KERNEL *mensajeAEnviar){
 			char* bufferAEnviar;
 
 			int tamanioBuffer;
@@ -279,7 +273,7 @@ int main(){
 
 	 //creo el pcb
 
-	pcb* nuevoPCB=malloc(sizeof(pcb));
+	kernel_pcb* nuevoPCB=malloc(sizeof(kernel_pcb));
 
 t_metadata_program* unProgram = metadata_desde_literal(mensajeAenviar);
 
